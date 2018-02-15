@@ -83,9 +83,10 @@ def delete_comment(user_id, comment_id):
             db.session.delete(comment)
             db.session.commit()
             return jsonify(state=True),200
+        return jsonify(error="This user can't delete this comment!"),401
     return jsonify(error="comment not found"),404
 
-        ########### UPVOTE COMMENT
+########### UPVOTE COMMENT
 
 @api.route('/comments/<int:comment_id>/upvotes', methods=['POST'])
 @authorized

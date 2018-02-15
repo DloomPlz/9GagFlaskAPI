@@ -2,6 +2,7 @@ from flask import jsonify, request, current_app, abort
 from itsdangerous import (TimedJSONWebSignatureSerializer
                           as Serializer, BadSignature, SignatureExpired)
 from functools import wraps
+from gimgurpython import ImgurClient
 
 from . import api
 from .. import db, bcrypt
@@ -38,60 +39,73 @@ def authorized(fn):
 @api.route('/posts', methods=['POST'])
 @authorized
 def create_post(user_id):
-    # datas = request.get_json()
-    # image=datas.get('image','')
-    #     if image is not '':
-    #     #changer la config par les valeurs du JSON, laisser None dans album
-    #     config = {
-    #         'album': None,
-    #         'name':  'Catastrophe!',
-    #         'title': 'Catastrophe!',
-    #         'description': 'Cute kitten being dead'
-    #     }
-    #     #penser à import current_app
-    #     # imgur_client = ImgurClient(
-    #     #     current_app.config['IMGUR_CLIENT_ID'],
-    #     #     current_app.config['IMGUR_CLIENT_SECRET'],
-    #     #     current_app.config['IMGUR_ACCESS_TOKEN'],
-    #     #     current_app.config['IMGUR_REFRESH_TOKEN']
-    #     # )
-    #     imgur_client = ImgurClient(
-    #         '891edbe392e448f',
-    #         'ed66022b-ee9c-4047-9482-f1dff8addae1',
-    #         '6de37753376a790d346d5095a5eb2ad331ce4e01',
-    #         '224f62de0522d94a4f400396ebed374ff2199cd5'
-    #     )
-    #     image = imgur_client.upload_from_base64(image, config=config, anon=False)
-
-    #     # on ajoute en DB l'url retourné par imgur
-    #     # image.url = image['link']
-
-    #     # tu remarqueras qu'ici l'upload peut être très long selon le poids de l'image
-    #     # il va falloir songer à "paralleliser" les taches, car là tant que le fichier upload,
-    #     # tout ton serveur est en attente -> pas cool
-    #     # donc faudra songer à ajouter du parallelisme ici
-    #     # LMGTFY : flask parallel ou python thread
-    #     # TODO : ajouter parallelisme
-    #     return jsonify(image=image['link']),200
-    # return jsonify(error="image not in JSON"),400
     datas = request.get_json()
 
-    description = datas.get('description', '')
+    description=datas.get('description','')
     if description is '':
-        return jsonify(error="description vide"),400
+        return jsonify(error="description not in JSON"),400
 
-    url = datas.get('url', '')
-    if url is '':
-        return jsonify(error="url vide"),400
+    title=datas.get('title','')
+    if title is '':
+        return jsonify(error="title not in JSON"),400
+
+    image=datas.get('image','')
+    if image is '':
+        return jsonify(error="image not in JSON"),400
+    if image.startswith("data:image/jpeg;base64,"):
+        image = image[23:]
+
+    config = {
+        'album': None,
+        'name':  title,
+        'title': title,
+        'description': description
+    }
+
+    imgur_client = ImgurClient(
+        current_app.config['IMGUR_CLIENT_ID'],
+        current_app.config['IMGUR_CLIENT_SECRET'],
+        current_app.config['IMGUR_ACCESS_TOKEN'],
+        current_app.config['IMGUR_REFRESH_TOKEN']
+    )
 
     post = Post()
+    post.title = title
     post.description = description
-    post.url = url
+    if User.query.filter(User.id.ilike(user_id)).first() is None:
+        return jsonify(error="User inexistant"),404
     post.user_id = user_id
+
+    # TODO : ajouter parallelisme
+    image = imgur_client.upload_from_base64(image, config=config, anon=False)
+
+    # on ajoute en DB l'url retourné par imgur
+    post.url = image['link']
 
     db.session.add(post)
     db.session.commit()
     return post_schema.jsonify(post),200
+
+
+
+    # datas = request.get_json()
+
+    # description = datas.get('description', '')
+    # if description is '':
+    #     return jsonify(error="description vide"),400
+
+    # url = datas.get('url', '')
+    # if url is '':
+    #     return jsonify(error="url vide"),400
+
+    # post = Post()
+    # post.description = description
+    # post.url = url
+    # post.user_id = user_id
+
+    # db.session.add(post)
+    # db.session.commit()
+    # return post_schema.jsonify(post),200
 
     ######### GETTER POST
 
@@ -120,6 +134,7 @@ def delete_post(user_id, post_id):
             db.session.delete(post)
             db.session.commit()
             return jsonify(state=True),200
+        return jsonify(error="This user can't delete this post!"),401
     return jsonify(error="post not found"),404
 
     ########### UPVOTE POST

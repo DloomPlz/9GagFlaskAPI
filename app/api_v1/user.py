@@ -35,20 +35,22 @@ def authorized(fn):
 
 
 
-############ CREER NEW USER ---- WORKS
+############ CREER NEW USER
 
 @api.route('/users/signup', methods=['POST'])
 def signup_user():
     datas = request.get_json()
     username=datas.get('username','')
-
-    # TESTS
-
+    #TESTS
     if username is '':
         return jsonify(error="username is empty"),400
+
     email=datas.get('email','')
     if email is '':
         return jsonify(error="email is empty"),400
+    if User.query.filter(User.email.ilike(email)).first() is not None:
+        return jsonify(error="email is taken"),401
+
     password=datas.get('password','')
     if password is '':
         return jsonify(error="password is empty"),400
@@ -66,13 +68,13 @@ def signup_user():
     return jsonify(token=token),200
 
 
-############## LOGIN PAR USER OU MAIL  -----WORKS
+############## LOGIN PAR USER OU MAIL
 
 @api.route('/users/login', methods=['POST'])
 def login_username_or_email():
     datas = request.get_json()
 
-    # Récupération des datas et tests
+    #Récupération des datas et tests
     password=datas.get('password','')
     if password is '':
         return jsonify(error="password is empty"),400
@@ -102,7 +104,7 @@ def login_username_or_email():
     return jsonify(error="username, mail or password is incorrect"),300
 
 
-######### GETTER USER ---- WORKS
+######### GETTER USER
 
 
 @api.route('/users/<string:username>', methods=['GET'])
@@ -127,4 +129,5 @@ def delete_user(user_id):
             db.session.delete(user)
             db.session.commit()
             return jsonify(state=True),200
+        return jsonify(error="This user can't delete another user!"),401
     return jsonify(error="user not found"),404
